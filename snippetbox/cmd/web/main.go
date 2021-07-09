@@ -3,9 +3,12 @@ package main
 import (
 	"database/sql"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/programervn/snippetbox/pkg/models/mysql"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -17,13 +20,18 @@ import (
 type application struct {
 	errorLog *log.Logger
 	infoLog  *log.Logger
+	snippets *mysql.SnippetModel
 }
+
+//var app *application
 
 func main() {
 	// Define a new command-line flag with the name 'addr', a default value of
 	// and some short help text explaining what the flag controls. The value of
 	// flag will be stored in the addr variable at runtime.
 	addr := flag.String("addr", ":4000", "HTTP network address")
+
+	dsn := flag.String("dsn", "root:vivas@123@tcp(10.84.5.158:3306)/vivasmariadb?parseTime=true", "MySQL database")
 
 	// Importantly, we use the flag.Parse() function to parse the command-line
 	// This reads in the command-line flag value and assigns it to the addr
@@ -42,12 +50,24 @@ func main() {
 	// prefix for message (INFO followed by a tab), and flags to indicate what
 	// additional information to include (local date and time). Note that the fl
 	// are joined using the bitwise OR operator |.
-	infoLog := log.New(f, "INFO\t", log.Ldate|log.Ltime)
+	//infoLog := log.New(f, "INFO\t", log.Ldate|log.Ltime)
+	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
 
 	// Create a logger for writing error messages in the same way, but use stde
 	// the destination and use the log.Lshortfile flag to include the relevant
 	// file name and line number.
 	errorLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
+
+	// To keep the main() function tidy I've put the code for creating a connec
+	// pool into the separate openDB() function below. We pass openDB() the DSN
+	// from the command-line flag.
+	db, err := openDB(*dsn)
+	if err != nil {
+		errorLog.Fatal(err)
+	}
+	// We also defer a call to db.Close(), so that the connection pool is closed
+	// before the main() function exits.
+	defer db.Close()
 
 	// Initialize a new instance of application containing the dependencies.I understand that this approach might feel a bit complicated and
 	//convoluted, especially when an alternative is to simply make the
@@ -58,7 +78,12 @@ func main() {
 	app := &application{
 		errorLog: errorLog,
 		infoLog:  infoLog,
+		snippets: &mysql.SnippetModel{DB: db},
 	}
+
+	infoLog.Println("app=", app)
+
+	//app.snippets = &mysql.SnippetModel{DB: db}
 
 	//mux := http.NewServeMux()
 	//mux.HandleFunc("/", app.home)
@@ -82,7 +107,9 @@ func main() {
 	errorLog.Fatal(err)
 }
 
-func openDB(dsn string) *sql.DB {
+func openDB(dsn string) (*sql.DB, error) {
+	//fmt.Println("Connection string", dsn)
+	fmt.Println("Connection string", dsn)
 
 	db, err := sql.Open("mysql", dsn)
 
@@ -94,6 +121,6 @@ func openDB(dsn string) *sql.DB {
 		log.Fatal(err)
 	}
 
-	return db
+	return db, err
 
 }
